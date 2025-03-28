@@ -29,6 +29,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("Erro ao conectar ao banco de dados: %v", err)
 	}
+	defer db.Close()
 
 	// Inicializar router
 	router := setupRouter()
@@ -38,6 +39,9 @@ func main() {
 
 	// Inicializar serviços
 	services := initServices(repos)
+
+	// LINHA ADICIONADA: Configurar middleware com o serviço de autenticação
+	middleware.SetAuthService(services.Auth)
 
 	// Inicializar handlers
 	handlers := initHandlers(services)

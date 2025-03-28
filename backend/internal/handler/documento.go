@@ -12,6 +12,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
+	"empresa-app/backend/internal/middleware"
 	"empresa-app/backend/internal/model"
 	"empresa-app/backend/internal/service"
 )
@@ -27,8 +28,8 @@ func NewDocumentoHandler(documentoService *service.DocumentoService) *DocumentoH
 // Create - Criar novo documento com upload de arquivo
 func (h *DocumentoHandler) Create(c *gin.Context) {
 	// Obter ID do colaborador do token
-	colaboradorID, exists := c.Get("colaborador_id")
-	if !exists {
+	colaboradorID, err := middleware.CurrentUser(c)
+	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Não autorizado"})
 		return
 	}
@@ -125,7 +126,7 @@ func (h *DocumentoHandler) Create(c *gin.Context) {
 
 	// Criar documento
 	documento := &model.Documento{
-		ColaboradorID:  colaboradorID.(int),
+		ColaboradorID:  colaboradorID,
 		Titulo:         req.Titulo,
 		Descricao:      req.Descricao,
 		TipoDocumento:  req.TipoDocumento,
@@ -150,13 +151,17 @@ func (h *DocumentoHandler) Create(c *gin.Context) {
 // List - Listar documentos com filtros
 func (h *DocumentoHandler) List(c *gin.Context) {
 	// Obter ID e cargo do colaborador
-	colaboradorID, exists := c.Get("colaborador_id")
-	if !exists {
+	colaboradorID, err := middleware.CurrentUser(c)
+	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Não autorizado"})
 		return
 	}
 
-	cargoID, _ := c.Get("cargo_id")
+	cargoID, exists := c.Get("cargo_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Não autorizado"})
+		return
+	}
 
 	// Parâmetros
 	status := c.Query("status")
@@ -177,8 +182,7 @@ func (h *DocumentoHandler) List(c *gin.Context) {
 		}
 	} else {
 		// Colaborador normal só vê seus próprios documentos
-		id := colaboradorID.(int)
-		colaboradorIDPtr = &id
+		colaboradorIDPtr = &colaboradorID
 	}
 
 	documentos, err := h.documentoService.List(colaboradorIDPtr, status, limit, offset)
@@ -193,13 +197,17 @@ func (h *DocumentoHandler) List(c *gin.Context) {
 // GetByID - Obter documento por ID
 func (h *DocumentoHandler) GetByID(c *gin.Context) {
 	// Obter ID e cargo do colaborador
-	colaboradorID, exists := c.Get("colaborador_id")
-	if !exists {
+	colaboradorID, err := middleware.CurrentUser(c)
+	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Não autorizado"})
 		return
 	}
 
-	cargoID, _ := c.Get("cargo_id")
+	cargoID, exists := c.Get("cargo_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Não autorizado"})
+		return
+	}
 
 	// Obter ID do documento
 	id, err := strconv.Atoi(c.Param("id"))
@@ -217,7 +225,7 @@ func (h *DocumentoHandler) GetByID(c *gin.Context) {
 
 	// Verificar permissão
 	isAdmin := cargoID.(int) == 2 || cargoID.(int) == 5 || cargoID.(int) == 6
-	if !isAdmin && documento.ColaboradorID != colaboradorID.(int) {
+	if !isAdmin && documento.ColaboradorID != colaboradorID {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Sem permissão"})
 		return
 	}
@@ -235,7 +243,7 @@ func (h *DocumentoHandler) Aprovar(c *gin.Context) {
 	}
 
 	// Obter ID do colaborador
-	colaboradorID, _ := c.Get("colaborador_id")
+	colaboradorID, _ := middleware.CurrentUser(c)
 
 	// Obter ID do documento
 	id, err := strconv.Atoi(c.Param("id"))
@@ -244,7 +252,7 @@ func (h *DocumentoHandler) Aprovar(c *gin.Context) {
 		return
 	}
 
-	if err := h.documentoService.UpdateStatus(id, "aprovado", colaboradorID.(int)); err != nil {
+	if err := h.documentoService.UpdateStatus(id, "aprovado", colaboradorID); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Erro ao aprovar documento: " + err.Error()})
 		return
 	}
@@ -262,7 +270,7 @@ func (h *DocumentoHandler) Rejeitar(c *gin.Context) {
 	}
 
 	// Obter ID do colaborador
-	colaboradorID, _ := c.Get("colaborador_id")
+	colaboradorID, _ := middleware.CurrentUser(c)
 
 	// Obter ID do documento
 	id, err := strconv.Atoi(c.Param("id"))
@@ -281,7 +289,7 @@ func (h *DocumentoHandler) Rejeitar(c *gin.Context) {
 		return
 	}
 
-	if err := h.documentoService.UpdateStatus(id, "rejeitado", colaboradorID.(int)); err != nil {
+	if err := h.documentoService.UpdateStatus(id, "rejeitado", colaboradorID); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Erro ao rejeitar documento: " + err.Error()})
 		return
 	}
@@ -326,13 +334,17 @@ func (h *DocumentoHandler) Enviar(c *gin.Context) {
 // Download - Fazer download do arquivo
 func (h *DocumentoHandler) Download(c *gin.Context) {
 	// Obter ID e cargo do colaborador
-	colaboradorID, exists := c.Get("colaborador_id")
-	if !exists {
+	colaboradorID, err := middleware.CurrentUser(c)
+	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Não autorizado"})
 		return
 	}
 
-	cargoID, _ := c.Get("cargo_id")
+	cargoID, exists := c.Get("cargo_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Não autorizado"})
+		return
+	}
 
 	// Obter ID do documento
 	id, err := strconv.Atoi(c.Param("id"))
@@ -350,7 +362,7 @@ func (h *DocumentoHandler) Download(c *gin.Context) {
 
 	// Verificar permissão
 	isAdmin := cargoID.(int) == 2 || cargoID.(int) == 5 || cargoID.(int) == 6
-	if !isAdmin && documento.ColaboradorID != colaboradorID.(int) {
+	if !isAdmin && documento.ColaboradorID != colaboradorID {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Sem permissão"})
 		return
 	}

@@ -360,4 +360,21 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   emptyText: {
-    textAlign: 'ce
+    textAlign: 'center',
+    color: '#999',
+    fontStyle: 'italic',
+  },
+  adminButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#0066cc',
+    padding: 12,
+    borderRadius: 4,
+  },
+  adminButtonText: {
+    color: '#FFF',
+    fontWeight: 'bold',
+    marginLeft: 8,
+  }
+});

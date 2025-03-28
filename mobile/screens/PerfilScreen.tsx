@@ -238,4 +238,8 @@ const styles = StyleSheet.create({
   },
   logoutButtonText: {
     color: '#fff',
-    fon
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginLeft: 8,
+  },
+});

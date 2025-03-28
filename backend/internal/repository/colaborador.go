@@ -21,7 +21,7 @@ func (r *ColaboradorRepository) GetByID(id int) (*model.Colaborador, error) {
 	query := `
 		SELECT id, uuid, nome, email, cargo_id, data_admissao, status, 
 		       foto_perfil, telefone, dados_bancarios, criado_em, atualizado_em
-		FROM colaboradores
+		FROM usuarios
 		WHERE id = $1
 	`
 
@@ -55,7 +55,7 @@ func (r *ColaboradorRepository) GetByEmail(email string) (*model.Colaborador, er
 	query := `
 		SELECT id, uuid, nome, email, senha, cargo_id, data_admissao, status, 
 		       foto_perfil, telefone, dados_bancarios, criado_em, atualizado_em
-		FROM colaboradores
+		FROM usuarios
 		WHERE email = $1
 	`
 
@@ -94,7 +94,7 @@ func (r *ColaboradorRepository) Create(colaborador *model.Colaborador) error {
 	}
 
 	query := `
-		INSERT INTO colaboradores (
+		INSERT INTO usuarios (
 			nome, email, senha, cargo_id, data_admissao, status,
 			foto_perfil, telefone, dados_bancarios
 		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
@@ -128,7 +128,7 @@ func (r *ColaboradorRepository) Create(colaborador *model.Colaborador) error {
 
 func (r *ColaboradorRepository) Update(colaborador *model.Colaborador) error {
 	query := `
-		UPDATE colaboradores
+		UPDATE usuarios
 		SET nome = $1, cargo_id = $2, status = $3, foto_perfil = $4, 
 		    telefone = $5, dados_bancarios = $6, atualizado_em = CURRENT_TIMESTAMP
 		WHERE id = $7

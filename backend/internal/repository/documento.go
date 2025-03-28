@@ -3,6 +3,7 @@ package repository
 import (
 	"database/sql"
 	"errors"
+	"fmt"
 	"time"
 
 	"empresa-app/backend/internal/model"
@@ -18,10 +19,10 @@ func NewDocumentoRepository(db *sql.DB) *DocumentoRepository {
 
 func (r *DocumentoRepository) Create(doc *model.Documento) error {
 	query := `
-		INSERT INTO documentos (
-			colaborador_id, titulo, descricao, tipo_documento, data_documento,
-			valor, caminho_arquivo, mime_type, tamanho_bytes, status
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		INSERT INTO recibos (
+			usuario_id, titulo, descricao, categoria, data, 
+			valor, anexo_url, dados_adicionais, status
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		RETURNING id, uuid, criado_em, atualizado_em
 	`
 
@@ -34,8 +35,7 @@ func (r *DocumentoRepository) Create(doc *model.Documento) error {
 		doc.DataDocumento,
 		doc.Valor,
 		doc.CaminhoArquivo,
-		doc.MimeType,
-		doc.TamanhoBytes,
+		doc.DadosAdicionais,
 		"pendente", // Status inicial
 	).Scan(
 		&doc.ID,
@@ -54,18 +54,22 @@ func (r *DocumentoRepository) Create(doc *model.Documento) error {
 func (r *DocumentoRepository) GetByID(id int) (*model.Documento, error) {
 	query := `
 		SELECT 
-			id, uuid, colaborador_id, titulo, descricao, tipo_documento, data_documento,
-			valor, caminho_arquivo, mime_type, tamanho_bytes, status, aprovado_por,
-			data_aprovacao, enviado_para_financas, data_envio, observacoes_envio,
-			dados_adicionais, criado_em, atualizado_em
-		FROM documentos
-		WHERE id = $1
+			r.id, r.usuario_id, r.titulo, r.descricao, r.categoria, r.data,
+			r.valor, r.anexo_url, r.status, r.aprovado_por, r.data_aprovacao,
+			r.criado_em, r.atualizado_em, u.uuid
+		FROM recibos r
+		JOIN usuarios u ON r.usuario_id = u.id
+		WHERE r.id = $1
 	`
 
 	doc := &model.Documento{}
+	var dataAprovacao sql.NullTime
+	var aprovadoPor sql.NullInt32
+	var enviadoParaFinancas bool
+	var dataEnvio sql.NullTime
+
 	err := r.db.QueryRow(query, id).Scan(
 		&doc.ID,
-		&doc.UUID,
 		&doc.ColaboradorID,
 		&doc.Titulo,
 		&doc.Descricao,
@@ -73,17 +77,12 @@ func (r *DocumentoRepository) GetByID(id int) (*model.Documento, error) {
 		&doc.DataDocumento,
 		&doc.Valor,
 		&doc.CaminhoArquivo,
-		&doc.MimeType,
-		&doc.TamanhoBytes,
 		&doc.Status,
-		&doc.AprovadoPor,
-		&doc.DataAprovacao,
-		&doc.EnviadoParaFinancas,
-		&doc.DataEnvio,
-		&doc.ObservacoesEnvio,
-		&doc.DadosAdicionais,
+		&aprovadoPor,
+		&dataAprovacao,
 		&doc.CriadoEm,
 		&doc.AtualizadoEm,
+		&doc.UUID,
 	)
 
 	if err != nil {
@@ -93,15 +92,31 @@ func (r *DocumentoRepository) GetByID(id int) (*model.Documento, error) {
 		return nil, err
 	}
 
+	// Converter nullable fields
+	if aprovadoPor.Valid {
+		val := int(aprovadoPor.Int32)
+		doc.AprovadoPor = &val
+	}
+
+	if dataAprovacao.Valid {
+		doc.DataAprovacao = &dataAprovacao.Time
+	}
+
+	doc.EnviadoParaFinancas = enviadoParaFinancas
+	if dataEnvio.Valid {
+		doc.DataEnvio = &dataEnvio.Time
+	}
+
 	return doc, nil
 }
 
 func (r *DocumentoRepository) List(colaboradorID *int, status string, limit, offset int) ([]*model.Documento, error) {
 	query := `
 		SELECT 
-			id, uuid, colaborador_id, titulo, tipo_documento, data_documento,
-			valor, caminho_arquivo, mime_type, status, criado_em
-		FROM documentos
+			r.id, r.usuario_id, r.titulo, r.categoria, r.data,
+			r.valor, r.anexo_url, r.status, r.criado_em, u.uuid
+		FROM recibos r
+		JOIN usuarios u ON r.usuario_id = u.id
 		WHERE 1=1
 	`
 
@@ -109,19 +124,29 @@ func (r *DocumentoRepository) List(colaboradorID *int, status string, limit, off
 	paramCount := 1
 
 	if colaboradorID != nil {
-		query += " AND colaborador_id = $" + string(paramCount)
+		query += fmt.Sprintf(" AND r.usuario_id = $%d", paramCount)
 		params = append(params, *colaboradorID)
 		paramCount++
 	}
 
-	if status != "" {
-		query += " AND status = $" + string(paramCount)
+	if status != "" && status != "todos" {
+		query += fmt.Sprintf(" AND r.status = $%d", paramCount)
 		params = append(params, status)
 		paramCount++
 	}
 
-	query += " ORDER BY criado_em DESC LIMIT $" + string(paramCount) + " OFFSET $" + string(paramCount+1)
-	params = append(params, limit, offset)
+	query += " ORDER BY r.criado_em DESC"
+
+	if limit > 0 {
+		query += fmt.Sprintf(" LIMIT $%d", paramCount)
+		params = append(params, limit)
+		paramCount++
+
+		if offset > 0 {
+			query += fmt.Sprintf(" OFFSET $%d", paramCount)
+			params = append(params, offset)
+		}
+	}
 
 	rows, err := r.db.Query(query, params...)
 	if err != nil {
@@ -134,16 +159,15 @@ func (r *DocumentoRepository) List(colaboradorID *int, status string, limit, off
 		doc := &model.Documento{}
 		err := rows.Scan(
 			&doc.ID,
-			&doc.UUID,
 			&doc.ColaboradorID,
 			&doc.Titulo,
 			&doc.TipoDocumento,
 			&doc.DataDocumento,
 			&doc.Valor,
 			&doc.CaminhoArquivo,
-			&doc.MimeType,
 			&doc.Status,
 			&doc.CriadoEm,
+			&doc.UUID,
 		)
 		if err != nil {
 			return nil, err
@@ -166,14 +190,14 @@ func (r *DocumentoRepository) UpdateStatus(id int, status string, aprovadoPor in
 
 	if status == "aprovado" || status == "rejeitado" {
 		query = `
-			UPDATE documentos
+			UPDATE recibos
 			SET status = $1, aprovado_por = $2, data_aprovacao = $3, atualizado_em = CURRENT_TIMESTAMP
 			WHERE id = $4
 		`
 		params = []interface{}{status, aprovadoPor, now, id}
 	} else {
 		query = `
-			UPDATE documentos
+			UPDATE recibos
 			SET status = $1, atualizado_em = CURRENT_TIMESTAMP
 			WHERE id = $2
 		`
@@ -199,9 +223,13 @@ func (r *DocumentoRepository) UpdateStatus(id int, status string, aprovadoPor in
 
 func (r *DocumentoRepository) MarkAsSent(id int, observacoes string) error {
 	query := `
-		UPDATE documentos
-		SET enviado_para_financas = true, data_envio = CURRENT_TIMESTAMP,
-		    observacoes_envio = $1, atualizado_em = CURRENT_TIMESTAMP
+		UPDATE recibos
+		SET dados_adicionais = jsonb_set(
+			COALESCE(dados_adicionais, '{}'::jsonb),
+			'{enviado_para_financas}',
+			jsonb_build_object('enviado', true, 'data', CURRENT_TIMESTAMP, 'observacoes', $1)
+		),
+		atualizado_em = CURRENT_TIMESTAMP
 		WHERE id = $2
 	`
 

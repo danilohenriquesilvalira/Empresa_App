@@ -85,3 +85,16 @@ type DocumentoCreateRequest struct {
 	DataDocumento string `form:"data_documento" binding:"required"` // formato: 2006-01-02
 	Valor         string `form:"valor"`
 }
+
+// PontoRegistroRequest representa a requisição para registro de ponto
+type PontoRegistroRequest struct {
+	Tipo        string `json:"tipo" binding:"required"`
+	DataHora    string `json:"data_hora"`
+	Localizacao string `json:"localizacao"`
+	Observacao  string `json:"observacao"`
+}
+
+// UpdateResponse representa uma resposta genérica de atualização
+type UpdateResponse struct {
+	Message string `json:"message"`
+}
