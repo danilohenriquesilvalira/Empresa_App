@@ -30,7 +30,6 @@ api.interceptors.response.use(
       // Token expirado ou inválido
       await AsyncStorage.removeItem('@RLSApp:token');
       await AsyncStorage.removeItem('@RLSApp:user');
-      // Não redirecionamos aqui para evitar loops - o componente raiz cuida disso
     }
     return Promise.reject(error);
   }
@@ -40,6 +39,23 @@ api.interceptors.response.use(
 export const authAPI = {
   login: async (email: string, senha: string) => {
     const response = await api.post('/auth/login', { email, senha });
+    return response.data;
+  }
+};
+
+export const colaboradorAPI = {
+  obterPerfil: async () => {
+    const response = await api.get('/me');
+    return response.data;
+  },
+  
+  atualizarPerfil: async (dados: any) => {
+    const response = await api.put('/me', dados);
+    return response.data;
+  },
+  
+  alterarSenha: async (senhaAtual: string, novaSenha: string) => {
+    const response = await api.put('/me/senha', { senha_atual: senhaAtual, nova_senha: novaSenha });
     return response.data;
   }
 };

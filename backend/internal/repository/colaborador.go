@@ -157,3 +157,64 @@ func (r *ColaboradorRepository) VerifyPassword(storedHash, password string) bool
 	err := bcrypt.CompareHashAndPassword([]byte(storedHash), []byte(password))
 	return err == nil
 }
+
+// GetByIDWithPassword obtém o colaborador por ID incluindo a senha hasheada
+func (r *ColaboradorRepository) GetByIDWithPassword(id int) (*model.Colaborador, error) {
+	query := `
+		SELECT id, uuid, nome, email, senha, cargo_id, data_admissao, status, 
+		       foto_perfil, telefone, dados_bancarios, criado_em, atualizado_em
+		FROM usuarios
+		WHERE id = $1
+	`
+
+	colaborador := &model.Colaborador{}
+	err := r.db.QueryRow(query, id).Scan(
+		&colaborador.ID,
+		&colaborador.UUID,
+		&colaborador.Nome,
+		&colaborador.Email,
+		&colaborador.Senha,
+		&colaborador.CargoID,
+		&colaborador.DataAdmissao,
+		&colaborador.Status,
+		&colaborador.FotoPerfil,
+		&colaborador.Telefone,
+		&colaborador.DadosBancarios,
+		&colaborador.CriadoEm,
+		&colaborador.AtualizadoEm,
+	)
+
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, errors.New("colaborador não encontrado")
+		}
+		return nil, err
+	}
+
+	return colaborador, nil
+}
+
+// UpdatePassword atualiza apenas a senha do colaborador
+func (r *ColaboradorRepository) UpdatePassword(id int, hashedPassword string) error {
+	query := `
+		UPDATE usuarios
+		SET senha = $1, atualizado_em = CURRENT_TIMESTAMP
+		WHERE id = $2
+	`
+
+	result, err := r.db.Exec(query, hashedPassword, id)
+	if err != nil {
+		return err
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+
+	if rowsAffected == 0 {
+		return errors.New("colaborador não encontrado")
+	}
+
+	return nil
+}

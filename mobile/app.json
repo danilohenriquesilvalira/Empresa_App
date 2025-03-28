@@ -22,6 +22,7 @@
     },
     "ios": {
       "bundleIdentifier": "com.rlsautomacao.app"
-    }
+    },
+    "newArchEnabled": true
   }
 }
